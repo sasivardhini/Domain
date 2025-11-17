@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Domain Alert - Track Your Domain Expiry Dates</title>
+    <meta name="description" content="Free domain expiry checker and alert system. Track your domain registrations and never miss a renewal.">
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Favicon -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌐</text></svg>">
+
+    <style>
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .fade-in {
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        .loading {
+            border: 3px solid #f3f4f6;
+            border-top: 3px solid #3b82f6;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .alert-badge {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .5; }
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
+
+    <!-- Header -->
+    <header class="bg-white shadow-sm border-b border-gray-200">
+        <div class="max-w-6xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <span class="text-4xl">🌐</span>
+                    <div>
+                        <h1 class="text-2xl font-bold text-gray-900">Domain Alert</h1>
+                        <p class="text-sm text-gray-600">Track domain expiry dates effortlessly</p>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <div id="alertBadge" class="hidden">
+                        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-red-100 text-red-800 alert-badge">
+                            <span class="mr-1">⚠️</span>
+                            <span id="alertCount">0</span> Alerts
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-6xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+
+        <!-- Search Section -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-8 fade-in">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">Check Domain Status</h2>
+
+            <div class="flex gap-3">
+                <div class="flex-1">
+                    <input
+                        type="text"
+                        id="domainInput"
+                        placeholder="Enter domain (e.g., example.com)"
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                    >
+                </div>
+                <button
+                    id="checkBtn"
+                    class="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    Check Domain
+                </button>
+            </div>
+
+            <!-- Loading State -->
+            <div id="loadingState" class="hidden mt-4 flex items-center justify-center space-x-2 text-gray-600">
+                <div class="loading"></div>
+                <span>Checking domain status...</span>
+            </div>
+
+            <!-- Error Message -->
+            <div id="errorMessage" class="hidden mt-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+                <p class="font-medium">Error</p>
+                <p id="errorText" class="text-sm mt-1"></p>
+            </div>
+
+            <!-- Domain Info -->
+            <div id="domainInfo" class="hidden mt-6 fade-in">
+                <div class="border-t pt-4">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="bg-gray-50 p-4 rounded-lg">
+                            <p class="text-sm text-gray-600 mb-1">Domain Name</p>
+                            <p id="domainName" class="text-lg font-semibold text-gray-900"></p>
+                        </div>
+                        <div class="bg-gray-50 p-4 rounded-lg">
+                            <p class="text-sm text-gray-600 mb-1">Status</p>
+                            <p id="domainStatus" class="text-lg font-semibold"></p>
+                        </div>
+                        <div class="bg-gray-50 p-4 rounded-lg">
+                            <p class="text-sm text-gray-600 mb-1">Expiry Date</p>
+                            <p id="expiryDate" class="text-lg font-semibold text-gray-900"></p>
+                        </div>
+                        <div class="bg-gray-50 p-4 rounded-lg">
+                            <p class="text-sm text-gray-600 mb-1">Days Until Expiry</p>
+                            <p id="daysUntilExpiry" class="text-lg font-semibold"></p>
+                        </div>
+                        <div class="bg-gray-50 p-4 rounded-lg md:col-span-2">
+                            <p class="text-sm text-gray-600 mb-1">Registrar</p>
+                            <p id="registrar" class="text-lg font-semibold text-gray-900"></p>
+                        </div>
+                    </div>
+
+                    <div class="mt-4 flex gap-3">
+                        <button
+                            id="trackBtn"
+                            class="flex-1 px-6 py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition shadow-md hover:shadow-lg"
+                        >
+                            ⭐ Track This Domain
+                        </button>
+                        <a
+                            id="renewLink"
+                            href="#"
+                            target="_blank"
+                            class="flex-1 px-6 py-3 bg-orange-600 text-white font-semibold rounded-lg hover:bg-orange-700 transition shadow-md hover:shadow-lg text-center"
+                        >
+                            🔗 Renew Domain
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tracked Domains Section -->
+        <div class="bg-white rounded-lg shadow-md p-6 fade-in">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-xl font-semibold text-gray-800">Tracked Domains</h2>
+                <button
+                    id="clearAllBtn"
+                    class="px-4 py-2 text-sm text-red-600 hover:text-red-700 font-medium transition"
+                >
+                    Clear All
+                </button>
+            </div>
+
+            <!-- Empty State -->
+            <div id="emptyState" class="text-center py-12">
+                <div class="text-6xl mb-4">📋</div>
+                <h3 class="text-lg font-medium text-gray-900 mb-2">No domains tracked yet</h3>
+                <p class="text-gray-600">Search for a domain above and click "Track This Domain" to start monitoring</p>
+            </div>
+
+            <!-- Domains List -->
+            <div id="domainsList" class="hidden space-y-3">
+                <!-- Domains will be inserted here -->
+            </div>
+        </div>
+
+        <!-- Info Section -->
+        <div class="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-6">
+            <h3 class="font-semibold text-blue-900 mb-2">ℹ️ How It Works</h3>
+            <ul class="space-y-2 text-blue-800 text-sm">
+                <li>✓ Check any domain's expiry date and status in real-time</li>
+                <li>✓ Track multiple domains - all data stored locally in your browser</li>
+                <li>✓ Get visual alerts when domains are expiring soon</li>
+                <li>✓ 100% free, no registration required</li>
+                <li>✓ Your data never leaves your device</li>
+            </ul>
+        </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="mt-12 pb-8 text-center text-gray-600 text-sm">
+        <p>Built with ❤️ using RDAP API | All data stored locally in your browser</p>
+    </footer>
+
+    <!-- JavaScript -->
+    <script src="app.js"></script>
+</body>
+</html>

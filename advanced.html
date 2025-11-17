@@ -9,6 +9,9 @@
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
 
+    <!-- Chart.js for Analytics -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
     <!-- Tailwind Dark Mode Config -->
     <script>
         tailwind.config = {
@@ -185,6 +188,15 @@
                 </button>
                 <button class="tab-button px-4 py-3 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white whitespace-nowrap transition border-b-2 border-transparent" data-tab="subdomain">
                     🔎 Subdomain Finder
+                </button>
+                <button class="tab-button px-4 py-3 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white whitespace-nowrap transition border-b-2 border-transparent" data-tab="ssl">
+                    🔒 SSL Checker
+                </button>
+                <button class="tab-button px-4 py-3 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white whitespace-nowrap transition border-b-2 border-transparent" data-tab="security">
+                    🛡️ Security
+                </button>
+                <button class="tab-button px-4 py-3 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white whitespace-nowrap transition border-b-2 border-transparent" data-tab="analytics">
+                    📈 Analytics
                 </button>
                 <button class="tab-button px-4 py-3 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white whitespace-nowrap transition border-b-2 border-transparent" data-tab="tools">
                     🛠️ Tools
@@ -575,11 +587,195 @@
             </div>
         </div>
 
+        <!-- SSL Checker Tab -->
+        <div id="tab-ssl" class="tab-content hidden">
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 fade-in">
+                <h2 class="text-xl font-semibold text-gray-800 dark:text-white mb-4">SSL Certificate Checker</h2>
+                <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">Check SSL certificate details and expiry dates</p>
+
+                <div class="flex gap-3 mb-4">
+                    <input
+                        type="text"
+                        id="sslInput"
+                        placeholder="Enter domain (e.g., example.com)"
+                        class="flex-1 px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    >
+                    <button
+                        id="sslCheckBtn"
+                        class="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition shadow-md hover:shadow-lg"
+                    >
+                        Check SSL
+                    </button>
+                </div>
+
+                <!-- SSL Loading State -->
+                <div id="sslLoadingState" class="hidden mt-4 flex items-center justify-center space-x-2 text-gray-600 dark:text-gray-400">
+                    <div class="loading"></div>
+                    <span>Checking SSL certificate...</span>
+                </div>
+
+                <!-- SSL Results -->
+                <div id="sslResults" class="hidden mt-6"></div>
+            </div>
+        </div>
+
+        <!-- Security Tab -->
+        <div id="tab-security" class="tab-content hidden">
+            <div class="grid grid-cols-1 gap-6">
+                <!-- Security Headers Checker -->
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 fade-in">
+                    <h3 class="text-lg font-semibold text-gray-800 dark:text-white mb-4">🛡️ Security Headers Analysis</h3>
+                    <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">Check HTTP security headers</p>
+
+                    <div class="flex gap-3 mb-4">
+                        <input
+                            type="text"
+                            id="securityInput"
+                            placeholder="Enter domain (e.g., example.com)"
+                            class="flex-1 px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        >
+                        <button
+                            id="securityCheckBtn"
+                            class="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition"
+                        >
+                            Check Security
+                        </button>
+                    </div>
+
+                    <div id="securityLoadingState" class="hidden mt-4 flex items-center justify-center space-x-2 text-gray-600 dark:text-gray-400">
+                        <div class="loading"></div>
+                        <span>Analyzing security headers...</span>
+                    </div>
+
+                    <div id="securityResults" class="hidden mt-6"></div>
+                </div>
+
+                <!-- Email Security Checker -->
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 fade-in">
+                    <h3 class="text-lg font-semibold text-gray-800 dark:text-white mb-4">📧 Email Security Check</h3>
+                    <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">Check SPF, DMARC, and MX records</p>
+
+                    <div class="flex gap-3 mb-4">
+                        <input
+                            type="text"
+                            id="emailSecInput"
+                            placeholder="Enter domain (e.g., example.com)"
+                            class="flex-1 px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        >
+                        <button
+                            id="emailSecCheckBtn"
+                            class="px-6 py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition"
+                        >
+                            Check Email
+                        </button>
+                    </div>
+
+                    <div id="emailSecLoadingState" class="hidden mt-4 flex items-center justify-center space-x-2 text-gray-600 dark:text-gray-400">
+                        <div class="loading"></div>
+                        <span>Checking email security...</span>
+                    </div>
+
+                    <div id="emailSecResults" class="hidden mt-6"></div>
+                </div>
+
+                <!-- Domain Comparison -->
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 fade-in">
+                    <h3 class="text-lg font-semibold text-gray-800 dark:text-white mb-4">⚖️ Domain Comparison</h3>
+                    <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">Compare two domains side-by-side</p>
+
+                    <div class="grid grid-cols-2 gap-3 mb-4">
+                        <input
+                            type="text"
+                            id="compareInput1"
+                            placeholder="First domain"
+                            class="px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        >
+                        <input
+                            type="text"
+                            id="compareInput2"
+                            placeholder="Second domain"
+                            class="px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        >
+                    </div>
+                    <button
+                        id="compareBtn"
+                        class="w-full px-6 py-3 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-700 transition"
+                    >
+                        Compare Domains
+                    </button>
+
+                    <div id="compareLoadingState" class="hidden mt-4 flex items-center justify-center space-x-2 text-gray-600 dark:text-gray-400">
+                        <div class="loading"></div>
+                        <span>Comparing domains...</span>
+                    </div>
+
+                    <div id="compareResults" class="hidden mt-6"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Analytics Tab -->
+        <div id="tab-analytics" class="tab-content hidden">
+            <div class="grid grid-cols-1 gap-6">
+                <!-- Expiry Timeline Chart -->
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 fade-in">
+                    <h3 class="text-lg font-semibold text-gray-800 dark:text-white mb-4">📊 Expiry Timeline</h3>
+                    <canvas id="expiryChart" class="w-full" height="300"></canvas>
+                </div>
+
+                <!-- Portfolio Analytics -->
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 fade-in">
+                    <h3 class="text-lg font-semibold text-gray-800 dark:text-white mb-4">💼 Portfolio Analytics</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div class="bg-blue-50 dark:bg-blue-900/30 p-4 rounded-lg">
+                            <p class="text-sm text-gray-600 dark:text-gray-400 mb-1">Average Domain Age</p>
+                            <p id="avgAge" class="text-2xl font-bold text-blue-600 dark:text-blue-400">0 years</p>
+                        </div>
+                        <div class="bg-green-50 dark:bg-green-900/30 p-4 rounded-lg">
+                            <p class="text-sm text-gray-600 dark:text-gray-400 mb-1">Est. Portfolio Value</p>
+                            <p id="portfolioValue" class="text-2xl font-bold text-green-600 dark:text-green-400">$0</p>
+                        </div>
+                        <div class="bg-purple-50 dark:bg-purple-900/30 p-4 rounded-lg">
+                            <p class="text-sm text-gray-600 dark:text-gray-400 mb-1">Total Registrars</p>
+                            <p id="totalRegistrars" class="text-2xl font-bold text-purple-600 dark:text-purple-400">0</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Registrar Distribution -->
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 fade-in">
+                    <h3 class="text-lg font-semibold text-gray-800 dark:text-white mb-4">📊 Registrar Distribution</h3>
+                    <div id="registrarChart"></div>
+                </div>
+
+                <!-- Export to Calendar -->
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 fade-in">
+                    <h3 class="text-lg font-semibold text-gray-800 dark:text-white mb-4">📅 Calendar Export</h3>
+                    <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">Export domain expiry dates to your calendar</p>
+                    <div class="space-y-3">
+                        <button
+                            id="exportIcsBtn"
+                            class="w-full px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition"
+                        >
+                            📥 Download .ICS File (All Domains)
+                        </button>
+                        <button
+                            id="exportIcsExpiringBtn"
+                            class="w-full px-6 py-3 bg-orange-600 text-white font-semibold rounded-lg hover:bg-orange-700 transition"
+                        >
+                            ⚠️ Download .ICS File (Expiring Soon Only)
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
     </main>
 
     <!-- Footer -->
     <footer class="mt-12 pb-8 text-center text-gray-600 dark:text-gray-400 text-sm">
-        <p>Domain Alert Pro v2.0 | Built with RDAP, DNS over HTTPS, and Certificate Transparency</p>
+        <p>Domain Alert Pro v3.0 | Enterprise-Grade Domain Monitoring & Security Analytics</p>
+        <p class="mt-1">SSL Checker • Email Security • Security Headers • Charts • Analytics • Calendar Export</p>
         <p class="mt-1">All data stored locally | 100% privacy-focused | Open source</p>
     </footer>
 

@@ -665,6 +665,15 @@ function switchTab(tabName) {
     const activeBtn = document.querySelector(`[data-tab="${tabName}"]`);
     activeBtn.classList.add('tab-active');
     activeBtn.classList.remove('text-gray-600', 'dark:text-gray-400');
+
+    // Render charts when analytics tab is opened
+    if (tabName === 'analytics') {
+        setTimeout(() => {
+            renderExpiryChart();
+            renderRegistrarChart();
+            updatePortfolioAnalytics();
+        }, 100);
+    }
 }
 
 function updateStatistics() {
@@ -1458,6 +1467,707 @@ function loadSettingsUI() {
 }
 
 // ============================================
+// SSL CERTIFICATE FUNCTIONS
+// ============================================
+
+async function checkSSL(domain) {
+    const normalizedDomain = normalizeDomain(domain);
+
+    try {
+        // Use crt.sh to get certificate info
+        const response = await fetch(`${CONFIG.CRT_SH_URL}/?q=${normalizedDomain}&output=json`);
+
+        if (!response.ok) {
+            throw new Error('SSL check failed');
+        }
+
+        const data = await response.json();
+
+        if (data.length === 0) {
+            return {
+                domain: normalizedDomain,
+                hasSSL: false,
+                message: 'No SSL certificates found'
+            };
+        }
+
+        // Get the most recent certificate
+        const latestCert = data.reduce((latest, cert) => {
+            const certDate = new Date(cert.entry_timestamp);
+            const latestDate = new Date(latest.entry_timestamp);
+            return certDate > latestDate ? cert : latest;
+        });
+
+        return {
+            domain: normalizedDomain,
+            hasSSL: true,
+            issuer: latestCert.issuer_name,
+            notBefore: latestCert.not_before,
+            notAfter: latestCert.not_after,
+            commonName: latestCert.common_name,
+            serialNumber: latestCert.serial_number,
+            entryTimestamp: latestCert.entry_timestamp
+        };
+    } catch (error) {
+        console.error('SSL check error:', error);
+        throw error;
+    }
+}
+
+async function handleSSLCheck() {
+    const input = document.getElementById('sslInput');
+    const domain = input.value.trim();
+
+    if (!domain) {
+        showToast('Please enter a domain name', 'warning');
+        return;
+    }
+
+    document.getElementById('sslLoadingState').classList.remove('hidden');
+    document.getElementById('sslResults').classList.add('hidden');
+
+    try {
+        const sslData = await checkSSL(domain);
+        displaySSLResults(sslData);
+        document.getElementById('sslLoadingState').classList.add('hidden');
+        showToast('SSL check completed', 'success');
+    } catch (error) {
+        document.getElementById('sslLoadingState').classList.add('hidden');
+        showToast('SSL check failed', 'error');
+    }
+}
+
+function displaySSLResults(sslData) {
+    const resultsDiv = document.getElementById('sslResults');
+
+    if (!sslData.hasSSL) {
+        resultsDiv.innerHTML = `
+            <div class="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-800 rounded-lg p-4">
+                <p class="text-yellow-800 dark:text-yellow-200">${sslData.message}</p>
+            </div>
+        `;
+    } else {
+        const notAfter = new Date(sslData.notAfter);
+        const now = new Date();
+        const daysUntilExpiry = Math.ceil((notAfter - now) / (1000 * 60 * 60 * 24));
+
+        let expiryColor = 'text-green-600 dark:text-green-400';
+        let expiryBg = 'bg-green-50 dark:bg-green-900/30 border-green-300 dark:border-green-800';
+
+        if (daysUntilExpiry < 0) {
+            expiryColor = 'text-red-600 dark:text-red-400';
+            expiryBg = 'bg-red-50 dark:bg-red-900/30 border-red-300 dark:border-red-800';
+        } else if (daysUntilExpiry < 30) {
+            expiryColor = 'text-orange-600 dark:text-orange-400';
+            expiryBg = 'bg-orange-50 dark:bg-orange-900/30 border-orange-300 dark:border-orange-800';
+        }
+
+        resultsDiv.innerHTML = `
+            <div class="border ${expiryBg} rounded-lg p-6">
+                <h4 class="font-semibold text-gray-900 dark:text-white mb-4">SSL Certificate Details</h4>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="bg-white dark:bg-gray-700 p-3 rounded">
+                        <p class="text-sm text-gray-600 dark:text-gray-400">Common Name</p>
+                        <p class="font-semibold text-gray-900 dark:text-white">${sslData.commonName}</p>
+                    </div>
+                    <div class="bg-white dark:bg-gray-700 p-3 rounded">
+                        <p class="text-sm text-gray-600 dark:text-gray-400">Days Until Expiry</p>
+                        <p class="font-semibold ${expiryColor}">${daysUntilExpiry} days</p>
+                    </div>
+                    <div class="bg-white dark:bg-gray-700 p-3 rounded">
+                        <p class="text-sm text-gray-600 dark:text-gray-400">Valid From</p>
+                        <p class="font-semibold text-gray-900 dark:text-white">${formatDate(sslData.notBefore)}</p>
+                    </div>
+                    <div class="bg-white dark:bg-gray-700 p-3 rounded">
+                        <p class="text-sm text-gray-600 dark:text-gray-400">Valid Until</p>
+                        <p class="font-semibold text-gray-900 dark:text-white">${formatDate(sslData.notAfter)}</p>
+                    </div>
+                    <div class="bg-white dark:bg-gray-700 p-3 rounded md:col-span-2">
+                        <p class="text-sm text-gray-600 dark:text-gray-400">Issuer</p>
+                        <p class="font-semibold text-gray-900 dark:text-white text-xs break-all">${sslData.issuer}</p>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    resultsDiv.classList.remove('hidden');
+}
+
+// ============================================
+// EMAIL SECURITY FUNCTIONS
+// ============================================
+
+async function checkEmailSecurity(domain) {
+    const normalizedDomain = normalizeDomain(domain);
+    const results = {
+        domain: normalizedDomain,
+        mx: [],
+        spf: null,
+        dmarc: null,
+        hasMX: false,
+        hasSPF: false,
+        hasDMARC: false
+    };
+
+    try {
+        // Check MX records
+        const mxData = await dnsLookup(normalizedDomain, 'MX');
+        if (mxData.Answer && mxData.Answer.length > 0) {
+            results.hasMX = true;
+            results.mx = mxData.Answer.map(record => record.data);
+        }
+
+        // Check SPF record (TXT)
+        const txtData = await dnsLookup(normalizedDomain, 'TXT');
+        if (txtData.Answer && txtData.Answer.length > 0) {
+            const spfRecord = txtData.Answer.find(record =>
+                record.data.includes('v=spf1')
+            );
+            if (spfRecord) {
+                results.hasSPF = true;
+                results.spf = spfRecord.data;
+            }
+        }
+
+        // Check DMARC record
+        const dmarcData = await dnsLookup(`_dmarc.${normalizedDomain}`, 'TXT');
+        if (dmarcData.Answer && dmarcData.Answer.length > 0) {
+            const dmarcRecord = dmarcData.Answer.find(record =>
+                record.data.includes('v=DMARC1')
+            );
+            if (dmarcRecord) {
+                results.hasDMARC = true;
+                results.dmarc = dmarcRecord.data;
+            }
+        }
+
+        return results;
+    } catch (error) {
+        console.error('Email security check error:', error);
+        throw error;
+    }
+}
+
+async function handleEmailSecurityCheck() {
+    const input = document.getElementById('emailSecInput');
+    const domain = input.value.trim();
+
+    if (!domain) {
+        showToast('Please enter a domain name', 'warning');
+        return;
+    }
+
+    document.getElementById('emailSecLoadingState').classList.remove('hidden');
+    document.getElementById('emailSecResults').classList.add('hidden');
+
+    try {
+        const emailData = await checkEmailSecurity(domain);
+        displayEmailSecurityResults(emailData);
+        document.getElementById('emailSecLoadingState').classList.add('hidden');
+        showToast('Email security check completed', 'success');
+    } catch (error) {
+        document.getElementById('emailSecLoadingState').classList.add('hidden');
+        showToast('Email security check failed', 'error');
+    }
+}
+
+function displayEmailSecurityResults(emailData) {
+    const resultsDiv = document.getElementById('emailSecResults');
+
+    const scoreTotal = (emailData.hasMX ? 1 : 0) + (emailData.hasSPF ? 1 : 0) + (emailData.hasDMARC ? 1 : 0);
+    const scorePercent = Math.round((scoreTotal / 3) * 100);
+
+    let scoreColor = 'text-red-600 dark:text-red-400';
+    let scoreBg = 'bg-red-100 dark:bg-red-900';
+
+    if (scorePercent >= 66) {
+        scoreColor = 'text-green-600 dark:text-green-400';
+        scoreBg = 'bg-green-100 dark:bg-green-900';
+    } else if (scorePercent >= 33) {
+        scoreColor = 'text-orange-600 dark:text-orange-400';
+        scoreBg = 'bg-orange-100 dark:bg-orange-900';
+    }
+
+    resultsDiv.innerHTML = `
+        <div class="space-y-4">
+            <!-- Score Card -->
+            <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-6 text-center ${scoreBg}">
+                <p class="text-sm text-gray-600 dark:text-gray-400 mb-2">Email Security Score</p>
+                <p class="text-4xl font-bold ${scoreColor}">${scorePercent}%</p>
+                <p class="text-sm text-gray-600 dark:text-gray-400 mt-2">${scoreTotal} of 3 checks passed</p>
+            </div>
+
+            <!-- MX Records -->
+            <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                <div class="flex items-center justify-between mb-2">
+                    <h5 class="font-semibold text-gray-900 dark:text-white">MX Records (Mail Servers)</h5>
+                    <span class="${emailData.hasMX ? 'text-green-600' : 'text-red-600'}">${emailData.hasMX ? '✓' : '✕'}</span>
+                </div>
+                ${emailData.hasMX ? `
+                    <div class="space-y-1">
+                        ${emailData.mx.map(mx => `
+                            <p class="text-sm font-mono bg-gray-50 dark:bg-gray-700 p-2 rounded text-gray-900 dark:text-white">${mx}</p>
+                        `).join('')}
+                    </div>
+                ` : '<p class="text-sm text-red-600 dark:text-red-400">No MX records found</p>'}
+            </div>
+
+            <!-- SPF Record -->
+            <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                <div class="flex items-center justify-between mb-2">
+                    <h5 class="font-semibold text-gray-900 dark:text-white">SPF Record</h5>
+                    <span class="${emailData.hasSPF ? 'text-green-600' : 'text-red-600'}">${emailData.hasSPF ? '✓' : '✕'}</span>
+                </div>
+                ${emailData.hasSPF ? `
+                    <p class="text-sm font-mono bg-gray-50 dark:bg-gray-700 p-2 rounded text-gray-900 dark:text-white break-all">${emailData.spf}</p>
+                ` : '<p class="text-sm text-red-600 dark:text-red-400">No SPF record found</p>'}
+            </div>
+
+            <!-- DMARC Record -->
+            <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                <div class="flex items-center justify-between mb-2">
+                    <h5 class="font-semibold text-gray-900 dark:text-white">DMARC Record</h5>
+                    <span class="${emailData.hasDMARC ? 'text-green-600' : 'text-red-600'}">${emailData.hasDMARC ? '✓' : '✕'}</span>
+                </div>
+                ${emailData.hasDMARC ? `
+                    <p class="text-sm font-mono bg-gray-50 dark:bg-gray-700 p-2 rounded text-gray-900 dark:text-white break-all">${emailData.dmarc}</p>
+                ` : '<p class="text-sm text-red-600 dark:text-red-400">No DMARC record found</p>'}
+            </div>
+        </div>
+    `;
+
+    resultsDiv.classList.remove('hidden');
+}
+
+// ============================================
+// SECURITY HEADERS FUNCTIONS
+// ============================================
+
+async function checkSecurityHeaders(domain) {
+    const normalizedDomain = normalizeDomain(domain);
+
+    try {
+        // Use SecurityHeaders.com API or manual fetch
+        const url = `https://${normalizedDomain}`;
+        const response = await fetch(url, {mode: 'cors'});
+
+        const headers = {
+            'strict-transport-security': response.headers.get('strict-transport-security'),
+            'content-security-policy': response.headers.get('content-security-policy'),
+            'x-frame-options': response.headers.get('x-frame-options'),
+            'x-content-type-options': response.headers.get('x-content-type-options'),
+            'referrer-policy': response.headers.get('referrer-policy'),
+            'permissions-policy': response.headers.get('permissions-policy')
+        };
+
+        return {
+            domain: normalizedDomain,
+            headers: headers,
+            hasHSTS: !!headers['strict-transport-security'],
+            hasCSP: !!headers['content-security-policy'],
+            hasXFrame: !!headers['x-frame-options'],
+            hasXContent: !!headers['x-content-type-options'],
+            hasReferrer: !!headers['referrer-policy'],
+            hasPermissions: !!headers['permissions-policy']
+        };
+    } catch (error) {
+        console.error('Security headers check error:', error);
+        throw error;
+    }
+}
+
+async function handleSecurityCheck() {
+    const input = document.getElementById('securityInput');
+    const domain = input.value.trim();
+
+    if (!domain) {
+        showToast('Please enter a domain name', 'warning');
+        return;
+    }
+
+    document.getElementById('securityLoadingState').classList.remove('hidden');
+    document.getElementById('securityResults').classList.add('hidden');
+
+    try {
+        const securityData = await checkSecurityHeaders(domain);
+        displaySecurityResults(securityData);
+        document.getElementById('securityLoadingState').classList.add('hidden');
+        showToast('Security check completed', 'success');
+    } catch (error) {
+        document.getElementById('securityLoadingState').classList.add('hidden');
+        document.getElementById('securityResults').innerHTML = `
+            <div class="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-800 rounded-lg p-4">
+                <p class="text-yellow-800 dark:text-yellow-200">⚠️ Unable to check security headers due to CORS restrictions.</p>
+                <p class="text-sm text-yellow-700 dark:text-yellow-300 mt-2">This is a browser security feature. The website may still have proper security headers.</p>
+            </div>
+        `;
+        document.getElementById('securityResults').classList.remove('hidden');
+    }
+}
+
+function displaySecurityResults(securityData) {
+    const resultsDiv = document.getElementById('securityResults');
+
+    const scoreTotal = (securityData.hasHSTS ? 1 : 0) + (securityData.hasCSP ? 1 : 0) +
+                       (securityData.hasXFrame ? 1 : 0) + (securityData.hasXContent ? 1 : 0) +
+                       (securityData.hasReferrer ? 1 : 0) + (securityData.hasPermissions ? 1 : 0);
+
+    const headers = [
+        {name: 'Strict-Transport-Security (HSTS)', key: 'strict-transport-security', has: securityData.hasHSTS},
+        {name: 'Content-Security-Policy (CSP)', key: 'content-security-policy', has: securityData.hasCSP},
+        {name: 'X-Frame-Options', key: 'x-frame-options', has: securityData.hasXFrame},
+        {name: 'X-Content-Type-Options', key: 'x-content-type-options', has: securityData.hasXContent},
+        {name: 'Referrer-Policy', key: 'referrer-policy', has: securityData.hasReferrer},
+        {name: 'Permissions-Policy', key: 'permissions-policy', has: securityData.hasPermissions}
+    ];
+
+    resultsDiv.innerHTML = `
+        <div class="space-y-3">
+            ${headers.map(header => `
+                <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                    <div class="flex items-center justify-between mb-2">
+                        <h5 class="font-semibold text-gray-900 dark:text-white">${header.name}</h5>
+                        <span class="${header.has ? 'text-green-600' : 'text-red-600'}">${header.has ? '✓ Present' : '✕ Missing'}</span>
+                    </div>
+                    ${header.has && securityData.headers[header.key] ? `
+                        <p class="text-xs font-mono bg-gray-50 dark:bg-gray-700 p-2 rounded text-gray-900 dark:text-white break-all">${securityData.headers[header.key]}</p>
+                    ` : ''}
+                </div>
+            `).join('')}
+        </div>
+    `;
+
+    resultsDiv.classList.remove('hidden');
+}
+
+// ============================================
+// DOMAIN COMPARISON FUNCTIONS
+// ============================================
+
+async function compareDomains(domain1, domain2) {
+    try {
+        const [data1, data2] = await Promise.all([
+            fetchDomainInfo(domain1),
+            fetchDomainInfo(domain2)
+        ]);
+
+        return {domain1: data1, domain2: data2};
+    } catch (error) {
+        console.error('Domain comparison error:', error);
+        throw error;
+    }
+}
+
+async function handleCompare() {
+    const domain1 = document.getElementById('compareInput1').value.trim();
+    const domain2 = document.getElementById('compareInput2').value.trim();
+
+    if (!domain1 || !domain2) {
+        showToast('Please enter both domains', 'warning');
+        return;
+    }
+
+    document.getElementById('compareLoadingState').classList.remove('hidden');
+    document.getElementById('compareResults').classList.add('hidden');
+
+    try {
+        const comparison = await compareDomains(domain1, domain2);
+        displayComparisonResults(comparison);
+        document.getElementById('compareLoadingState').classList.add('hidden');
+        showToast('Comparison completed', 'success');
+    } catch (error) {
+        document.getElementById('compareLoadingState').classList.add('hidden');
+        showToast('Comparison failed', 'error');
+    }
+}
+
+function displayComparisonResults(comparison) {
+    const resultsDiv = document.getElementById('compareResults');
+
+    const fields = [
+        {label: 'Domain', key: 'domain'},
+        {label: 'Status', key: 'status'},
+        {label: 'Expiry Date', key: 'expiryDate', format: formatDate},
+        {label: 'Created Date', key: 'createdDate', format: formatDate},
+        {label: 'Registrar', key: 'registrar'},
+        {label: 'Days Until Expiry', key: 'expiryDate', custom: (d) => {
+            const days = calculateDaysUntilExpiry(d.expiryDate);
+            return days !== null ? `${days} days` : 'Unknown';
+        }}
+    ];
+
+    resultsDiv.innerHTML = `
+        <div class="overflow-x-auto">
+            <table class="w-full border-collapse">
+                <thead>
+                    <tr class="bg-gray-100 dark:bg-gray-700">
+                        <th class="border border-gray-300 dark:border-gray-600 px-4 py-2 text-left text-gray-900 dark:text-white">Attribute</th>
+                        <th class="border border-gray-300 dark:border-gray-600 px-4 py-2 text-left text-gray-900 dark:text-white">${comparison.domain1.domain}</th>
+                        <th class="border border-gray-300 dark:border-gray-600 px-4 py-2 text-left text-gray-900 dark:text-white">${comparison.domain2.domain}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${fields.map(field => {
+                        let val1, val2;
+
+                        if (field.custom) {
+                            val1 = field.custom(comparison.domain1);
+                            val2 = field.custom(comparison.domain2);
+                        } else {
+                            val1 = comparison.domain1[field.key] || 'N/A';
+                            val2 = comparison.domain2[field.key] || 'N/A';
+
+                            if (field.format) {
+                                val1 = val1 !== 'N/A' ? field.format(val1) : val1;
+                                val2 = val2 !== 'N/A' ? field.format(val2) : val2;
+                            }
+                        }
+
+                        return `
+                            <tr>
+                                <td class="border border-gray-300 dark:border-gray-600 px-4 py-2 font-semibold text-gray-900 dark:text-white">${field.label}</td>
+                                <td class="border border-gray-300 dark:border-gray-600 px-4 py-2 text-gray-900 dark:text-white">${val1}</td>
+                                <td class="border border-gray-300 dark:border-gray-600 px-4 py-2 text-gray-900 dark:text-white">${val2}</td>
+                            </tr>
+                        `;
+                    }).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
+
+    resultsDiv.classList.remove('hidden');
+}
+
+// ============================================
+// ANALYTICS & CHARTS FUNCTIONS
+// ============================================
+
+function renderExpiryChart() {
+    const domains = getTrackedDomains();
+
+    if (domains.length === 0) {
+        document.getElementById('expiryChart').parentElement.innerHTML = `
+            <p class="text-center text-gray-600 dark:text-gray-400 py-12">No domains tracked yet</p>
+        `;
+        return;
+    }
+
+    // Group domains by expiry month
+    const expiryByMonth = {};
+
+    domains.forEach(domain => {
+        if (domain.expiryDate) {
+            const date = new Date(domain.expiryDate);
+            const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+
+            if (!expiryByMonth[monthKey]) {
+                expiryByMonth[monthKey] = 0;
+            }
+            expiryByMonth[monthKey]++;
+        }
+    });
+
+    // Sort by month
+    const sortedMonths = Object.keys(expiryByMonth).sort();
+    const counts = sortedMonths.map(month => expiryByMonth[month]);
+
+    const ctx = document.getElementById('expiryChart').getContext('2d');
+
+    if (window.expiryChartInstance) {
+        window.expiryChartInstance.destroy();
+    }
+
+    window.expiryChartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: sortedMonths,
+            datasets: [{
+                label: 'Domains Expiring',
+                data: counts,
+                backgroundColor: 'rgba(59, 130, 246, 0.5)',
+                borderColor: 'rgba(59, 130, 246, 1)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        stepSize: 1
+                    }
+                }
+            }
+        }
+    });
+}
+
+function renderRegistrarChart() {
+    const domains = getTrackedDomains();
+    const registrarCounts = {};
+
+    domains.forEach(domain => {
+        const registrar = domain.registrar || 'Unknown';
+        if (!registrarCounts[registrar]) {
+            registrarCounts[registrar] = 0;
+        }
+        registrarCounts[registrar]++;
+    });
+
+    const sorted = Object.entries(registrarCounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10);
+
+    const chartDiv = document.getElementById('registrarChart');
+
+    if (sorted.length === 0) {
+        chartDiv.innerHTML = `<p class="text-center text-gray-600 dark:text-gray-400">No data available</p>`;
+        return;
+    }
+
+    chartDiv.innerHTML = sorted.map(([registrar, count]) => {
+        const percent = (count / domains.length) * 100;
+        return `
+            <div class="mb-3">
+                <div class="flex items-center justify-between mb-1">
+                    <span class="text-sm font-medium text-gray-900 dark:text-white">${registrar}</span>
+                    <span class="text-sm text-gray-600 dark:text-gray-400">${count} (${percent.toFixed(1)}%)</span>
+                </div>
+                <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                    <div class="bg-blue-600 h-2 rounded-full" style="width: ${percent}%"></div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function updatePortfolioAnalytics() {
+    const domains = getTrackedDomains();
+
+    if (domains.length === 0) {
+        document.getElementById('avgAge').textContent = '0 years';
+        document.getElementById('portfolioValue').textContent = '$0';
+        document.getElementById('totalRegistrars').textContent = '0';
+        return;
+    }
+
+    // Calculate average age
+    let totalAge = 0;
+    let ageCount = 0;
+
+    domains.forEach(domain => {
+        if (domain.createdDate) {
+            const created = new Date(domain.createdDate);
+            const now = new Date();
+            const ageMs = now - created;
+            const ageYears = ageMs / (1000 * 60 * 60 * 24 * 365);
+            totalAge += ageYears;
+            ageCount++;
+        }
+    });
+
+    const avgAge = ageCount > 0 ? (totalAge / ageCount).toFixed(1) : 0;
+
+    // Estimate portfolio value (rough estimate: $10 per domain + $5 per year of age)
+    const estValue = domains.length * 10 + (totalAge * 5);
+
+    // Count unique registrars
+    const registrars = new Set();
+    domains.forEach(d => {
+        if (d.registrar) registrars.add(d.registrar);
+    });
+
+    document.getElementById('avgAge').textContent = `${avgAge} years`;
+    document.getElementById('portfolioValue').textContent = `$${Math.round(estValue)}`;
+    document.getElementById('totalRegistrars').textContent = registrars.size;
+}
+
+// ============================================
+// CALENDAR EXPORT FUNCTIONS
+// ============================================
+
+function generateICS(domains, expiringOnly = false) {
+    let filtered = domains;
+
+    if (expiringOnly) {
+        filtered = domains.filter(d => {
+            const days = calculateDaysUntilExpiry(d.expiryDate);
+            return days !== null && days <= CONFIG.ALERT_THRESHOLDS.WARNING;
+        });
+    }
+
+    const events = filtered.map(domain => {
+        if (!domain.expiryDate) return null;
+
+        const expiryDate = new Date(domain.expiryDate);
+        const reminderDate = new Date(expiryDate);
+        reminderDate.setDate(reminderDate.getDate() - 30); // 30 days before
+
+        const formatDateForICS = (date) => {
+            return date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+        };
+
+        return `BEGIN:VEVENT
+UID:${domain.domain}-${Date.now()}@domain-alert-pro
+DTSTAMP:${formatDateForICS(new Date())}
+DTSTART:${formatDateForICS(expiryDate)}
+SUMMARY:Domain Expiry: ${domain.domain}
+DESCRIPTION:Domain ${domain.domain} expires on this date. Registrar: ${domain.registrar}
+STATUS:CONFIRMED
+BEGIN:VALARM
+TRIGGER:-P30D
+DESCRIPTION:Domain ${domain.domain} expires in 30 days
+ACTION:DISPLAY
+END:VALARM
+END:VEVENT`;
+    }).filter(e => e !== null);
+
+    if (events.length === 0) {
+        showToast('No domains with expiry dates to export', 'warning');
+        return null;
+    }
+
+    const icsContent = `BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Domain Alert Pro//EN
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+X-WR-CALNAME:Domain Expiry Reminders
+X-WR-TIMEZONE:UTC
+${events.join('\n')}
+END:VCALENDAR`;
+
+    return icsContent;
+}
+
+function handleICSExport(expiringOnly = false) {
+    const domains = getTrackedDomains();
+
+    if (domains.length === 0) {
+        showToast('No domains to export', 'warning');
+        return;
+    }
+
+    const icsContent = generateICS(domains, expiringOnly);
+
+    if (!icsContent) return;
+
+    const filename = expiringOnly ? 'domain-expiry-alerts.ics' : 'domain-expiry-all.ics';
+    downloadFile(icsContent, filename, 'text/calendar');
+
+    showToast(`Calendar file exported: ${filename}`, 'success');
+}
+
+// ============================================
 // INITIALIZATION
 // ============================================
 
@@ -1525,6 +2235,21 @@ function initApp() {
 
     // Settings
     document.getElementById('saveSettingsBtn').addEventListener('click', handleSaveSettings);
+
+    // SSL Checker
+    document.getElementById('sslCheckBtn').addEventListener('click', handleSSLCheck);
+    document.getElementById('sslInput').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') handleSSLCheck();
+    });
+
+    // Security Checks
+    document.getElementById('securityCheckBtn').addEventListener('click', handleSecurityCheck);
+    document.getElementById('emailSecCheckBtn').addEventListener('click', handleEmailSecurityCheck);
+    document.getElementById('compareBtn').addEventListener('click', handleCompare);
+
+    // Analytics
+    document.getElementById('exportIcsBtn').addEventListener('click', () => handleICSExport(false));
+    document.getElementById('exportIcsExpiringBtn').addEventListener('click', () => handleICSExport(true));
 
     // Initial render
     renderDomainsList();

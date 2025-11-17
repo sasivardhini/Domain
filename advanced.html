@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="en" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Domain Alert Pro - Advanced Domain Monitoring & Analytics</title>
+    <meta name="description" content="Professional domain monitoring tool with DNS lookup, SSL checking, bulk analysis, subdomain discovery, and advanced analytics.">
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Tailwind Dark Mode Config -->
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    animation: {
+                        'fade-in': 'fadeIn 0.3s ease-out',
+                        'slide-in': 'slideIn 0.3s ease-out',
+                        'spin-slow': 'spin 2s linear infinite',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Favicon -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚀</text></svg>">
+
+    <style>
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(-10px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        .fade-in { animation: fadeIn 0.3s ease-out; }
+        .slide-in { animation: slideIn 0.3s ease-out; }
+
+        .loading {
+            border: 3px solid #f3f4f6;
+            border-top: 3px solid #3b82f6;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+
+        .dark .loading {
+            border-color: #374151;
+            border-top-color: #60a5fa;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .alert-badge {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        .tab-active {
+            border-bottom: 2px solid #3b82f6;
+            color: #3b82f6;
+        }
+
+        .dark .tab-active {
+            border-bottom-color: #60a5fa;
+            color: #60a5fa;
+        }
+
+        .dns-record {
+            font-family: 'Courier New', monospace;
+            font-size: 0.875rem;
+        }
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+
+        .dark ::-webkit-scrollbar-track {
+            background: #1e293b;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+
+        .dark ::-webkit-scrollbar-thumb {
+            background: #475569;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+
+        .tooltip {
+            position: relative;
+        }
+
+        .tooltip:hover::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 0.5rem;
+            background: #1f2937;
+            color: white;
+            border-radius: 0.375rem;
+            font-size: 0.75rem;
+            white-space: nowrap;
+            z-index: 50;
+            margin-bottom: 0.25rem;
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 min-h-screen transition-colors duration-200">
+
+    <!-- Toast Notification Container -->
+    <div id="toastContainer" class="fixed top-4 right-4 z-50 space-y-2"></div>
+
+    <!-- Header -->
+    <header class="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 transition-colors duration-200">
+        <div class="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <span class="text-4xl">🚀</span>
+                    <div>
+                        <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Domain Alert Pro</h1>
+                        <p class="text-sm text-gray-600 dark:text-gray-400">Advanced Domain Monitoring & Analytics</p>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <!-- Alert Badge -->
+                    <div id="alertBadge" class="hidden">
+                        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200 alert-badge">
+                            <span class="mr-1">⚠️</span>
+                            <span id="alertCount">0</span> Alerts
+                        </span>
+                    </div>
+
+                    <!-- Dark Mode Toggle -->
+                    <button id="darkModeToggle" class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition" data-tooltip="Toggle Dark Mode">
+                        <span class="text-2xl" id="darkModeIcon">🌙</span>
+                    </button>
+
+                    <!-- Notification Permission -->
+                    <button id="notificationBtn" class="hidden px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm font-medium">
+                        Enable Notifications
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Navigation Tabs -->
+    <nav class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 transition-colors duration-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex space-x-8 overflow-x-auto">
+                <button class="tab-button tab-active px-4 py-3 text-sm font-medium whitespace-nowrap transition border-b-2 border-transparent" data-tab="dashboard">
+                    📊 Dashboard
+                </button>
+                <button class="tab-button px-4 py-3 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white whitespace-nowrap transition border-b-2 border-transparent" data-tab="checker">
+                    🔍 Domain Checker
+                </button>
+                <button class="tab-button px-4 py-3 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white whitespace-nowrap transition border-b-2 border-transparent" data-tab="dns">
+                    🌐 DNS Lookup
+                </button>
+                <button class="tab-button px-4 py-3 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white whitespace-nowrap transition border-b-2 border-transparent" data-tab="bulk">
+                    📦 Bulk Checker
+                </button>
+                <button class="tab-button px-4 py-3 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white whitespace-nowrap transition border-b-2 border-transparent" data-tab="subdomain">
+                    🔎 Subdomain Finder
+                </button>
+                <button class="tab-button px-4 py-3 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white whitespace-nowrap transition border-b-2 border-transparent" data-tab="tools">
+                    🛠️ Tools
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+
+        <!-- Dashboard Tab -->
+        <div id="tab-dashboard" class="tab-content">
+            <!-- Statistics Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 fade-in">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm text-gray-600 dark:text-gray-400 mb-1">Total Domains</p>
+                            <p id="stat-total" class="text-3xl font-bold text-gray-900 dark:text-white">0</p>
+                        </div>
+                        <span class="text-4xl">📦</span>
+                    </div>
+                </div>
+
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 fade-in">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm text-gray-600 dark:text-gray-400 mb-1">Expiring Soon</p>
+                            <p id="stat-expiring" class="text-3xl font-bold text-red-600 dark:text-red-400">0</p>
+                        </div>
+                        <span class="text-4xl">⚠️</span>
+                    </div>
+                </div>
+
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 fade-in">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm text-gray-600 dark:text-gray-400 mb-1">Healthy</p>
+                            <p id="stat-healthy" class="text-3xl font-bold text-green-600 dark:text-green-400">0</p>
+                        </div>
+                        <span class="text-4xl">✅</span>
+                    </div>
+                </div>
+
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 fade-in">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm text-gray-600 dark:text-gray-400 mb-1">Categories</p>
+                            <p id="stat-categories" class="text-3xl font-bold text-blue-600 dark:text-blue-400">0</p>
+                        </div>
+                        <span class="text-4xl">🏷️</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Search and Filter -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-8 fade-in">
+                <div class="flex flex-col sm:flex-row gap-4 mb-4">
+                    <input
+                        type="text"
+                        id="searchDomains"
+                        placeholder="Search domains..."
+                        class="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    >
+                    <select id="filterCategory" class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                        <option value="">All Categories</option>
+                    </select>
+                    <select id="filterStatus" class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                        <option value="">All Status</option>
+                        <option value="expired">Expired</option>
+                        <option value="critical">Critical (< 30 days)</option>
+                        <option value="warning">Warning (< 60 days)</option>
+                        <option value="info">Info (< 90 days)</option>
+                        <option value="ok">Healthy (> 90 days)</option>
+                    </select>
+                </div>
+                <div class="flex gap-2">
+                    <button id="exportCsvBtn" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition text-sm font-medium">
+                        📥 Export CSV
+                    </button>
+                    <button id="exportJsonBtn" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm font-medium">
+                        📥 Export JSON
+                    </button>
+                    <button id="importBtn" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition text-sm font-medium">
+                        📤 Import CSV
+                    </button>
+                    <input type="file" id="importFile" accept=".csv" class="hidden">
+                    <button id="refreshAllBtn" class="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition text-sm font-medium">
+                        🔄 Refresh All
+                    </button>
+                </div>
+            </div>
+
+            <!-- Tracked Domains -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 fade-in">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-xl font-semibold text-gray-800 dark:text-white">Tracked Domains</h2>
+                    <button id="clearAllBtn" class="px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 font-medium transition">
+                        Clear All
+                    </button>
+                </div>
+
+                <!-- Empty State -->
+                <div id="emptyState" class="text-center py-12">
+                    <div class="text-6xl mb-4">📋</div>
+                    <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">No domains tracked yet</h3>
+                    <p class="text-gray-600 dark:text-gray-400">Go to Domain Checker to add your first domain</p>
+                </div>
+
+                <!-- Domains List -->
+                <div id="domainsList" class="hidden space-y-3"></div>
+            </div>
+        </div>
+
+        <!-- Domain Checker Tab -->
+        <div id="tab-checker" class="tab-content hidden">
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 fade-in">
+                <h2 class="text-xl font-semibold text-gray-800 dark:text-white mb-4">Check Domain Status</h2>
+
+                <div class="flex gap-3 mb-4">
+                    <input
+                        type="text"
+                        id="domainInput"
+                        placeholder="Enter domain (e.g., example.com)"
+                        class="flex-1 px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    >
+                    <button
+                        id="checkBtn"
+                        class="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        Check Domain
+                    </button>
+                </div>
+
+                <!-- Multi-TLD Checker -->
+                <div class="mb-4">
+                    <button id="checkMultiTldBtn" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition text-sm font-medium">
+                        🌍 Check Multiple TLDs
+                    </button>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Check .com, .net, .org, .io, .co availability</p>
+                </div>
+
+                <!-- Loading State -->
+                <div id="loadingState" class="hidden mt-4 flex items-center justify-center space-x-2 text-gray-600 dark:text-gray-400">
+                    <div class="loading"></div>
+                    <span>Checking domain status...</span>
+                </div>
+
+                <!-- Error Message -->
+                <div id="errorMessage" class="hidden mt-4 p-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-300">
+                    <p class="font-medium">Error</p>
+                    <p id="errorText" class="text-sm mt-1"></p>
+                </div>
+
+                <!-- Domain Info -->
+                <div id="domainInfo" class="hidden mt-6 fade-in"></div>
+
+                <!-- Multi-TLD Results -->
+                <div id="multiTldResults" class="hidden mt-6 fade-in"></div>
+            </div>
+        </div>
+
+        <!-- DNS Lookup Tab -->
+        <div id="tab-dns" class="tab-content hidden">
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 fade-in">
+                <h2 class="text-xl font-semibold text-gray-800 dark:text-white mb-4">DNS Record Lookup</h2>
+
+                <div class="flex gap-3 mb-4">
+                    <input
+                        type="text"
+                        id="dnsInput"
+                        placeholder="Enter domain (e.g., example.com)"
+                        class="flex-1 px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    >
+                    <button
+                        id="dnsLookupBtn"
+                        class="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition shadow-md hover:shadow-lg"
+                    >
+                        Lookup DNS
+                    </button>
+                </div>
+
+                <!-- DNS Loading State -->
+                <div id="dnsLoadingState" class="hidden mt-4 flex items-center justify-center space-x-2 text-gray-600 dark:text-gray-400">
+                    <div class="loading"></div>
+                    <span>Looking up DNS records...</span>
+                </div>
+
+                <!-- DNS Results -->
+                <div id="dnsResults" class="hidden mt-6 space-y-4"></div>
+            </div>
+        </div>
+
+        <!-- Bulk Checker Tab -->
+        <div id="tab-bulk" class="tab-content hidden">
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 fade-in">
+                <h2 class="text-xl font-semibold text-gray-800 dark:text-white mb-4">Bulk Domain Checker</h2>
+                <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">Enter multiple domains (one per line) to check them all at once</p>
+
+                <textarea
+                    id="bulkInput"
+                    placeholder="example.com&#10;google.com&#10;github.com"
+                    rows="10"
+                    class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-mono"
+                ></textarea>
+
+                <div class="flex gap-3 mt-4">
+                    <button
+                        id="bulkCheckBtn"
+                        class="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition shadow-md hover:shadow-lg"
+                    >
+                        Check All Domains
+                    </button>
+                    <button
+                        id="bulkTrackAllBtn"
+                        class="px-6 py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition shadow-md hover:shadow-lg hidden"
+                    >
+                        Track All
+                    </button>
+                    <button
+                        id="bulkExportBtn"
+                        class="px-6 py-3 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-700 transition shadow-md hover:shadow-lg hidden"
+                    >
+                        Export Results
+                    </button>
+                </div>
+
+                <!-- Bulk Progress -->
+                <div id="bulkProgress" class="hidden mt-4">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-sm text-gray-600 dark:text-gray-400">Progress</span>
+                        <span id="bulkProgressText" class="text-sm font-medium text-gray-900 dark:text-white">0 / 0</span>
+                    </div>
+                    <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                        <div id="bulkProgressBar" class="bg-blue-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                    </div>
+                </div>
+
+                <!-- Bulk Results -->
+                <div id="bulkResults" class="hidden mt-6 space-y-3"></div>
+            </div>
+        </div>
+
+        <!-- Subdomain Finder Tab -->
+        <div id="tab-subdomain" class="tab-content hidden">
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 fade-in">
+                <h2 class="text-xl font-semibold text-gray-800 dark:text-white mb-4">Subdomain Discovery</h2>
+                <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">Find subdomains using Certificate Transparency logs</p>
+
+                <div class="flex gap-3 mb-4">
+                    <input
+                        type="text"
+                        id="subdomainInput"
+                        placeholder="Enter domain (e.g., example.com)"
+                        class="flex-1 px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    >
+                    <button
+                        id="subdomainFindBtn"
+                        class="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition shadow-md hover:shadow-lg"
+                    >
+                        Find Subdomains
+                    </button>
+                </div>
+
+                <!-- Subdomain Loading State -->
+                <div id="subdomainLoadingState" class="hidden mt-4 flex items-center justify-center space-x-2 text-gray-600 dark:text-gray-400">
+                    <div class="loading"></div>
+                    <span>Discovering subdomains...</span>
+                </div>
+
+                <!-- Subdomain Results -->
+                <div id="subdomainResults" class="hidden mt-6"></div>
+            </div>
+        </div>
+
+        <!-- Tools Tab -->
+        <div id="tab-tools" class="tab-content hidden">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Domain Age Calculator -->
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 fade-in">
+                    <h3 class="text-lg font-semibold text-gray-800 dark:text-white mb-4">📅 Domain Age Calculator</h3>
+                    <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">Calculate how old a domain is</p>
+                    <div class="flex gap-3">
+                        <input
+                            type="text"
+                            id="ageInput"
+                            placeholder="example.com"
+                            class="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        >
+                        <button
+                            id="ageCheckBtn"
+                            class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                        >
+                            Calculate
+                        </button>
+                    </div>
+                    <div id="ageResult" class="hidden mt-4 p-4 bg-blue-50 dark:bg-blue-900/30 rounded-lg"></div>
+                </div>
+
+                <!-- Price Comparison -->
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 fade-in">
+                    <h3 class="text-lg font-semibold text-gray-800 dark:text-white mb-4">💰 Registrar Price Comparison</h3>
+                    <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">Compare prices across popular registrars</p>
+                    <div class="space-y-3">
+                        <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                            <div>
+                                <p class="font-medium text-gray-900 dark:text-white">Namecheap</p>
+                                <p class="text-sm text-gray-600 dark:text-gray-400">.com domain</p>
+                            </div>
+                            <div class="text-right">
+                                <p class="font-bold text-green-600 dark:text-green-400">$8.88/yr</p>
+                                <a href="#" class="text-xs text-blue-600 dark:text-blue-400 hover:underline">View →</a>
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                            <div>
+                                <p class="font-medium text-gray-900 dark:text-white">GoDaddy</p>
+                                <p class="text-sm text-gray-600 dark:text-gray-400">.com domain</p>
+                            </div>
+                            <div class="text-right">
+                                <p class="font-bold text-green-600 dark:text-green-400">$9.99/yr</p>
+                                <a href="#" class="text-xs text-blue-600 dark:text-blue-400 hover:underline">View →</a>
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                            <div>
+                                <p class="font-medium text-gray-900 dark:text-white">Cloudflare</p>
+                                <p class="text-sm text-gray-600 dark:text-gray-400">.com domain</p>
+                            </div>
+                            <div class="text-right">
+                                <p class="font-bold text-green-600 dark:text-green-400">$9.77/yr</p>
+                                <a href="#" class="text-xs text-blue-600 dark:text-blue-400 hover:underline">View →</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Settings -->
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 fade-in md:col-span-2">
+                    <h3 class="text-lg font-semibold text-gray-800 dark:text-white mb-4">⚙️ Settings</h3>
+                    <div class="space-y-4">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="font-medium text-gray-900 dark:text-white">Auto-refresh tracked domains</p>
+                                <p class="text-sm text-gray-600 dark:text-gray-400">Automatically check domains on page load</p>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="autoRefreshToggle" class="sr-only peer">
+                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                            </label>
+                        </div>
+
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="font-medium text-gray-900 dark:text-white">Browser notifications</p>
+                                <p class="text-sm text-gray-600 dark:text-gray-400">Get notified about expiring domains</p>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="notificationsToggle" class="sr-only peer">
+                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                            </label>
+                        </div>
+
+                        <div>
+                            <label class="block font-medium text-gray-900 dark:text-white mb-2">Alert Thresholds (days)</label>
+                            <div class="grid grid-cols-3 gap-4">
+                                <div>
+                                    <label class="text-sm text-gray-600 dark:text-gray-400">Critical</label>
+                                    <input type="number" id="thresholdCritical" value="30" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                                </div>
+                                <div>
+                                    <label class="text-sm text-gray-600 dark:text-gray-400">Warning</label>
+                                    <input type="number" id="thresholdWarning" value="60" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                                </div>
+                                <div>
+                                    <label class="text-sm text-gray-600 dark:text-gray-400">Info</label>
+                                    <input type="number" id="thresholdInfo" value="90" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                                </div>
+                            </div>
+                        </div>
+
+                        <button id="saveSettingsBtn" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium">
+                            Save Settings
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="mt-12 pb-8 text-center text-gray-600 dark:text-gray-400 text-sm">
+        <p>Domain Alert Pro v2.0 | Built with RDAP, DNS over HTTPS, and Certificate Transparency</p>
+        <p class="mt-1">All data stored locally | 100% privacy-focused | Open source</p>
+    </footer>
+
+    <!-- JavaScript -->
+    <script src="advanced.js"></script>
+</body>
+</html>

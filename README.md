@@ -4,6 +4,13 @@
 
 A lightweight, privacy-focused domain monitoring tool that runs entirely in your browser. No backend, no database, no registration required.
 
+## 📦 Two Versions Available
+
+- **Basic Version** (`index.html` + `app.js`) - Simple domain expiry tracker
+- **Advanced Version** (`advanced.html` + `advanced.js`) - Pro features with DNS, bulk checker, dark mode, and more!
+
+👉 **Want advanced features?** See [ADVANCED_README.md](./ADVANCED_README.md)
+
 ---
 
 ## ✨ Features
